@@ -2,16 +2,7 @@
     $.Redactor.prototype.video = function () {
         return {
             reUrlYoutube: /https?:\/\/(?:[0-9A-Z-]+\.)?(?:youtu\.be\/|youtube\.com\S*[^\w\-\s])([\w\-]{11})(?=[^\w\-]|$)(?![?=&+%\w.-]*(?:['"][^<>]*>|<\/a>))[?=&+%\w.-]*/ig,
-            getTemplate: function () {
-                return String()
-                    + '<section id="redactor-modal-video-insert" class="redactor-tab redactor-tab2">'
-                    + '<label>Название видео:</label>'
-                    + '<input type="text" id="redaktor-video-title" aria-label="Название видео" />'
-                    + '<label>Youtube Url</label>'
-                    + '<textarea id="redactor-insert-video-area" style="height: 160px;" placeholder="Формат: https://www.youtube.com/watch?v=B5BVyY6glCQ"></textarea>'
-                    + '<div id="redactor-image-box"></div>'
-                    + '</section>';
-            },
+            image: '',
             init: function () {
                 if (!this.opts.imageManagerJson) 
                     return;
@@ -20,6 +11,9 @@
                 this.button.addCallback(button, this.video.show);
             },
             show: function () {
+                this.modal.load('image', this.lang.get('image'), 700);
+                this.upload.init('#redactor-modal-image-droparea', this.opts.imageUpload, this.video.upload);
+                
                 var $modal = this.modal.getModal();
             
                 this.modal.createTabber($modal);
@@ -28,10 +22,17 @@
 
                 $('#redactor-modal-image-droparea').addClass('redactor-tab redactor-tab1');
 
-                //var $box2 = $('<div id="redactor-image-manager-box" style="overflow: auto; height: 300px;" class="redactor-tab redactor-tab2">').hide();
-                //$modal.append($box2);
-                this.modal.addTemplate('video', this.video.getTemplate());
+                var $box2 = $('<section id="redactor-modal-video-insert" class="redactor-tab redactor-tab2"><label>Название видео:</label><input type="text" id="redactor-video-title" aria-label="Название видео" /><label>Youtube Url</label><textarea id="redactor-insert-video-area" style="height: 50px;" placeholder="Формат: https://www.youtube.com/watch?v=B5BVyY6glCQ"></textarea><br><div id="redactor-image-box"></div></section>').hide();
+                $modal.append($box2);
 
+                this.selection.save();
+                this.modal.show();
+
+                this.modal.createCancelButton();
+                var button = this.modal.createActionButton(this.lang.get('insert'));
+                button.on('click', this.video.insert);
+            },
+            upload: function() {
                 $.ajax({
                     dataType: "json",
                     cache: false,
@@ -44,25 +45,57 @@
                             var id = '';
                             if (typeof val.id !== 'undefined') id = val.id;
 
-                            this.modal.load('video', this.lang.get('video'), 700);
-                            this.modal.createCancelButton();
-
-                            var button = this.modal.createActionButton(this.lang.get('insert'));
-                            button.on('click', this.video.insert);
-
                             var img = $('<img src="' + val.thumb + '" rel="' + val.image + '" title="' + thumbtitle + '" data-id="' + id + '" style="width: 100px; height: 75px; cursor: pointer;" />');
                             $('#redactor-image-box').append(img);
 
-                            this.selection.save();
-                            this.modal.show();
-
-                            $('#redactor-insert-video-area').focus();
-
+                            $('#redactor-image-box').find('img').on("click", function(){
+                                if(!$(this).hasClass("act")) { 
+                                    $(this).addClass("act");
+                                    image = $(this).attr("src");
+                                } else {
+                                    $(this).removeClass("act");
+                                }
+                            });
                         }, this));
                     }, this)
                 });
             },
-            insert: function () {}
+            insert: function () {
+                var title = $('#redactor-video-title').val(),
+                    data = $('#redactor-insert-video-area').val();
+
+                if (!data.match(/<iframe|<video/gi))
+                {
+                    data = this.clean.stripTags(data);
+
+                    var blockStart = '<div class="article-new__vdblk"><div class="video" id="video-wrapper"><div class="article-new__vdblk_overlay" id="youtube-video-play"></div>',
+                        blockTitleStart = '<div class="article-new__vdblk_title">',
+                        blockTitleEnd = '</div>',
+                        imgStart = '<img class="article-new__vdblk_bg" src="',
+                        imgEnd = '" />',
+                        iframeStart = '<iframe class="video__iframe" id="video" src="',
+                        iframeEnd = '" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>',
+                        blockEnd = '</div></div>';
+
+                    if (data.match(this.video.reUrlYoutube))
+                    {
+                        data = data.replace(this.video.reUrlYoutube, blockStart + blockTitleStart + title + blockTitleEnd + imgStart + image + imgEnd + iframeStart + '//www.youtube.com/embed/$1?enablejsapi=1&html5=1' + iframeEnd + blockEnd);
+                    }
+                }
+    
+                this.selection.restore();
+                this.modal.close();
+    
+                var current = this.selection.getBlock() || this.selection.getCurrent();
+    
+                if (current) $(current).after(data);
+                else
+                {
+                    this.insert.html(data);
+                }
+    
+                this.code.sync(); 
+            }
         };
     };
 })(jQuery);
